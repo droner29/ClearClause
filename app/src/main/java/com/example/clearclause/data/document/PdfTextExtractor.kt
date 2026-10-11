@@ -6,35 +6,52 @@ import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import java.io.IOException
 
 class PdfTextExtractor(private val context: Context) {
 
     fun extractText(uri: Uri): String {
-        PDFBoxResourceLoader.init(context)
+        PDFBoxResourceLoader.init(context.applicationContext)
 
-        val input = context.contentResolver.openInputStream(uri)
-            ?: throw Exception("Unable to open the selected PDF.")
+        val inputStream = context.contentResolver.openInputStream(uri)
+            ?: throw IOException("Unable to open the selected PDF.")
 
-        input.use { stream ->
-            PDDocument.load(stream).use { document ->
+        inputStream.use { stream ->
+            val document = try {
+                PDDocument.load(stream)
+            } catch (e: Exception) {
+                throw IOException(
+                    "Unable to read this PDF. The file may be invalid or password-protected.",
+                    e
+                )
+            }
 
-                if (document.isEncrypted) {
-                    throw Exception(
+            document.use { pdf ->
+                if (pdf.isEncrypted) {
+                    throw IOException(
                         "Password-protected PDFs are not supported."
                     )
                 }
 
-                val text = PDFTextStripper()
-                    .getText(document)
-                    .trim()
+                val pageCount = pdf.numberOfPages
 
-                if (text.isBlank()) {
-                    throw Exception(
-                        "No readable text found. This PDF may be scanned."
+                if (pageCount == 0) {
+                    throw IOException("This PDF contains no pages.")
+                }
+
+                val extractedText = try {
+                    PDFTextStripper().getText(pdf).trim()
+                } catch (e: Exception) {
+                    throw IOException("Failed to extract text from the PDF.", e)
+                }
+
+                if (extractedText.isBlank()) {
+                    throw IOException(
+                        "No readable text was found. This may be a scanned PDF."
                     )
                 }
 
-                return text
+                return extractedText
             }
         }
     }
