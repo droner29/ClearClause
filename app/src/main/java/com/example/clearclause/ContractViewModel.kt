@@ -1,3 +1,7 @@
+package com.example.clearclause
+
+class ContractViewModel {
+}
 
 package com.example.clearclause
 
